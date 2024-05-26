@@ -30,16 +30,6 @@ ICM42688::ICM42688(uint8_t idx)
 /* starts communication with the ICM42688 */
 int ICM42688::begin()
 {
-#if ICM42688_FEATURE_I2C
-    if (!_useSPI)
-    { // using I2C for communication
-        // starting the I2C bus
-        _i2c->begin();
-        // setting the I2C clock
-        _i2c->setClock(I2C_CLK);
-    }
-#endif
-
     // reset the ICM42688
     reset();
 
@@ -628,10 +618,8 @@ int ICM42688::writeRegister(uint8_t subAddress, uint8_t data)
 #if ICM42688_FEATURE_I2C
     if (!_useSPI)
     {
-        _i2c->beginTransmission(_address); // open the device
-        _i2c->write(subAddress);           // write the register address
-        _i2c->write(data);                 // write the data
-        _i2c->endTransmission();
+        i2cWrite(device_idx, subAddress); // write the register address
+        i2cWrite(device_idx, data);       // write the data
     }
 #endif
 
@@ -670,18 +658,14 @@ int ICM42688::readRegisters(uint8_t subAddress, uint8_t count, uint8_t *dest)
 #if ICM42688_FEATURE_I2C
     if (!_useSPI)
     {
-        _i2c->beginTransmission(_address); // open the device
-        _i2c->write(subAddress);           // specify the starting register address
-        _i2c->endTransmission(false);
-        _numBytes = _i2c->requestFrom(_address, count); // specify the number of bytes to receive
-        if (_numBytes == count)
+        i2cWrite(device_idx, subAddress); // specify the starting register address
+        _numBytes = count;
+        for (uint8_t i = 0; i < count; i++)
         {
-            for (uint8_t i = 0; i < count; i++)
-            {
-                dest[i] = _i2c->read();
-            }
-            return 1;
+            dest[i] = i2cRead(device_idx);
         }
+
+        return 1;
     }
 #endif
 

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Features
 option(FEATURE_SPI "SPI bus" ON)
-option(FEATURE_I2C "I2C bus" OFF)
+option(FEATURE_I2C "I2C bus" ON)
 
 project(icm-42688 CXX)
 
