@@ -1,23 +1,11 @@
 #pragma once
 #include <cstdint>
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-// Users of the library need to implement these
-#if ICM42688_FEATURE_SPI
-    extern void spiTransfer(uint8_t idx, const uint8_t *tx_buf, uint8_t *rx_buf, size_t count);
-#endif
-#if ICM42688_FEATURE_I2C
-    extern void    i2cWrite(uint8_t idx, uint8_t data);
-    extern uint8_t i2cRead(uint8_t idx);
-#endif
-#ifdef __cplusplus
-}
-#endif
+#include "registers.h"
 
-class ICM42688
+namespace ICM42688
+{
+class Device
 {
 public:
     enum GyroFS : uint8_t
@@ -66,7 +54,7 @@ public:
      * @param      idx      I2C device idx
      * @param[in]  address  Address of ICM 42688-p device
      */
-    ICM42688(uint8_t idx, uint8_t address);
+    Device(uint8_t idx, uint8_t address);
 #endif
 
 #if ICM42688_FEATURE_SPI
@@ -76,7 +64,7 @@ public:
      * @param      idx    SPI device idx
      * @param[in]  csPin  Chip Select pin
      */
-    ICM42688(uint8_t idx);
+    Device(uint8_t idx);
 #endif
 
     /**
@@ -277,28 +265,27 @@ protected:
 
     uint8_t _bank = 0; ///< current user bank
 
-    const uint8_t FIFO_EN      = 0x23;
+#if ICM42688_FEATURE_FIFO
     const uint8_t FIFO_TEMP_EN = 0x04;
     const uint8_t FIFO_GYRO    = 0x02;
     const uint8_t FIFO_ACCEL   = 0x01;
     // const uint8_t FIFO_COUNT = 0x2E;
     // const uint8_t FIFO_DATA = 0x30;
+#endif
 
     // BANK 1
-    // const uint8_t GYRO_CONFIG_STATIC2 = 0x0B;
     const uint8_t GYRO_NF_ENABLE   = 0x00;
     const uint8_t GYRO_NF_DISABLE  = 0x01;
     const uint8_t GYRO_AAF_ENABLE  = 0x00;
     const uint8_t GYRO_AAF_DISABLE = 0x02;
 
     // BANK 2
-    // const uint8_t ACCEL_CONFIG_STATIC2 = 0x03;
     const uint8_t ACCEL_AAF_ENABLE  = 0x00;
     const uint8_t ACCEL_AAF_DISABLE = 0x01;
 
     // private functions
-    int writeRegister(uint8_t subAddress, uint8_t data);
-    int readRegisters(uint8_t subAddress, uint8_t count, uint8_t *dest);
+    int writeRegister(Register t_register, uint8_t data);
+    int readRegisters(Register t_register, uint8_t count, uint8_t *dest);
     int setBank(uint8_t bank);
 
     /**
@@ -313,36 +300,4 @@ protected:
      */
     uint8_t whoAmI();
 };
-
-class ICM42688_FIFO : public ICM42688
-{
-public:
-    using ICM42688::ICM42688;
-    int  enableFifo(bool accel, bool gyro, bool temp);
-    int  readFifo();
-    void getFifoAccelX_mss(size_t *size, float *data);
-    void getFifoAccelY_mss(size_t *size, float *data);
-    void getFifoAccelZ_mss(size_t *size, float *data);
-    void getFifoGyroX(size_t *size, float *data);
-    void getFifoGyroY(size_t *size, float *data);
-    void getFifoGyroZ(size_t *size, float *data);
-    void getFifoTemperature_C(size_t *size, float *data);
-
-protected:
-    // fifo
-    bool   _enFifoAccel   = false;
-    bool   _enFifoGyro    = false;
-    bool   _enFifoTemp    = false;
-    size_t _fifoSize      = 0;
-    size_t _fifoFrameSize = 0;
-    float  _axFifo[85]    = {};
-    float  _ayFifo[85]    = {};
-    float  _azFifo[85]    = {};
-    size_t _aSize         = 0;
-    float  _gxFifo[85]    = {};
-    float  _gyFifo[85]    = {};
-    float  _gzFifo[85]    = {};
-    size_t _gSize         = 0;
-    float  _tFifo[256]    = {};
-    size_t _tSize         = 0;
-};
+} // namespace ICM42688
