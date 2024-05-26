@@ -8,33 +8,42 @@ class Fifo : public Device
 {
 public:
     using Device::Device;
-    int  enableFifo(bool accel, bool gyro, bool temp);
-    int  readFifo();
-    void getFifoAccelX_mss(size_t *size, float *data);
-    void getFifoAccelY_mss(size_t *size, float *data);
-    void getFifoAccelZ_mss(size_t *size, float *data);
-    void getFifoGyroX(size_t *size, float *data);
-    void getFifoGyroY(size_t *size, float *data);
-    void getFifoGyroZ(size_t *size, float *data);
-    void getFifoTemperature_C(size_t *size, float *data);
+
+    int enableFifo(bool t_accel, bool t_gyro, bool t_temp);
+
+    int readFifo();
+
+    void getFifoAccelXMss(size_t *t_size, float *t_data);
+    void getFifoAccelYMss(size_t *t_size, float *t_data);
+    void getFifoAccelZMss(size_t *t_size, float *t_data);
+
+    void getFifoGyroX(size_t *t_size, float *t_data);
+    void getFifoGyroY(size_t *t_size, float *t_data);
+    void getFifoGyroZ(size_t *t_size, float *t_data);
+
+    void getFifoTemperatureC(size_t *t_size, float *t_data);
 
 protected:
     // fifo
-    bool   _enFifoAccel   = false;
-    bool   _enFifoGyro    = false;
-    bool   _enFifoTemp    = false;
-    size_t _fifoSize      = 0;
-    size_t _fifoFrameSize = 0;
-    float  _axFifo[85]    = {};
-    float  _ayFifo[85]    = {};
-    float  _azFifo[85]    = {};
-    size_t _aSize         = 0;
-    float  _gxFifo[85]    = {};
-    float  _gyFifo[85]    = {};
-    float  _gzFifo[85]    = {};
-    size_t _gSize         = 0;
-    float  _tFifo[256]    = {};
-    size_t _tSize         = 0;
+    bool m_en_fifo_accel = false;
+    bool m_en_fifo_gyro  = false;
+    bool m_en_fifo_temp  = false;
+
+    size_t m_fifo_size       = 0;
+    size_t m_fifo_frame_size = 0;
+
+    float  m_ax_fifo[85] = {};
+    float  m_ay_fifo[85] = {};
+    float  m_az_fifo[85] = {};
+    size_t m_a_size      = 0;
+
+    float  m_gx_fifo[85] = {};
+    float  m_gy_fifo[85] = {};
+    float  m_gz_fifo[85] = {};
+    size_t m_g_size      = 0;
+
+    float  m_t_fifo[256] = {};
+    size_t m_t_size      = 0;
 };
 } // namespace ICM42688
 #endif

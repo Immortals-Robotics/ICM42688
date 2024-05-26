@@ -8,33 +8,11 @@
 
 namespace ICM42688
 {
-#if ICM42688_FEATURE_I2C
-/* Device object, input the I2C bus and address */
-Device::Device(uint8_t idx, uint8_t address)
-{
-    device_idx = idx;
-    _address   = address; // I2C address
-    _useSPI    = false;   // set to use I2C
-}
-#endif
-
-#if ICM42688_FEATURE_SPI
-/* Device object, input the SPI bus and chip select pin */
-Device::Device(uint8_t idx)
-{
-    device_idx = idx;
-    _useSPI    = true; // set to use SPI
-}
-#endif
-
-/* starts communication with the ICM42688 */
 int Device::begin()
 {
-    // reset the ICM42688
     reset();
 
-    // check the WHO AM I byte
-    if (whoAmI() != WHO_AM_I)
+    if (whoAmI() != kWhoAmI)
     {
         return -3;
     }
@@ -46,7 +24,7 @@ int Device::begin()
     }
 
     // 16G is default -- do this to set up accel resolution scaling
-    int ret = setAccelFS(gpm16);
+    int ret = setAccelFS(AccelFullScale::gpm16);
     if (ret < 0)
         return ret;
 
@@ -69,8 +47,7 @@ int Device::begin()
     return 1;
 }
 
-/* sets the accelerometer full scale range to values other than default */
-int Device::setAccelFS(AccelFS fssel)
+int Device::setAccelFS(AccelFullScale t_fssel)
 {
     setBank(0);
 
@@ -80,19 +57,18 @@ int Device::setAccelFS(AccelFS fssel)
         return -1;
 
     // only change FS_SEL in reg
-    reg = (fssel << 5) | (reg & 0x1F);
+    reg = ((uint8_t) t_fssel << 5) | (reg & 0x1F);
 
     if (writeRegister(Register::UB0_REG_ACCEL_CONFIG0, reg) < 0)
         return -2;
 
-    _accelScale = static_cast<float>(1 << (4 - fssel)) / 32768.0f;
-    _accelFS    = fssel;
+    m_accel_scale = static_cast<float>(1 << (4 - (uint8_t) t_fssel)) / 32768.0f;
+    m_accel_fs    = t_fssel;
 
     return 1;
 }
 
-/* sets the gyro full scale range to values other than default */
-int Device::setGyroFS(GyroFS fssel)
+int Device::setGyroFS(GyroFullScale t_fssel)
 {
     setBank(0);
 
@@ -102,18 +78,18 @@ int Device::setGyroFS(GyroFS fssel)
         return -1;
 
     // only change FS_SEL in reg
-    reg = (fssel << 5) | (reg & 0x1F);
+    reg = (t_fssel << 5) | (reg & 0x1F);
 
     if (writeRegister(Register::UB0_REG_GYRO_CONFIG0, reg) < 0)
         return -2;
 
-    _gyroScale = (2000.0f / static_cast<float>(1 << fssel)) / 32768.0f;
-    _gyroFS    = fssel;
+    m_gyro_scale = (2000.0f / static_cast<float>(1 << t_fssel)) / 32768.0f;
+    m_gyro_fs    = t_fssel;
 
     return 1;
 }
 
-int Device::setAccelODR(ODR odr)
+int Device::setAccelODR(OutputDataRate t_odr)
 {
     setBank(0);
 
@@ -123,7 +99,7 @@ int Device::setAccelODR(ODR odr)
         return -1;
 
     // only change ODR in reg
-    reg = odr | (reg & 0xF0);
+    reg = (uint8_t) t_odr | (reg & 0xF0);
 
     if (writeRegister(Register::UB0_REG_ACCEL_CONFIG0, reg) < 0)
         return -2;
@@ -131,7 +107,7 @@ int Device::setAccelODR(ODR odr)
     return 1;
 }
 
-int Device::setGyroODR(ODR odr)
+int Device::setGyroODR(OutputDataRate t_odr)
 {
     setBank(0);
 
@@ -141,7 +117,7 @@ int Device::setGyroODR(ODR odr)
         return -1;
 
     // only change ODR in reg
-    reg = odr | (reg & 0xF0);
+    reg = (uint8_t) t_odr | (reg & 0xF0);
 
     if (writeRegister(Register::UB0_REG_GYRO_CONFIG0, reg) < 0)
         return -2;
@@ -149,12 +125,12 @@ int Device::setGyroODR(ODR odr)
     return 1;
 }
 
-int Device::setFilters(bool gyroFilters, bool accFilters)
+int Device::setFilters(bool t_gyro_filters, bool t_acc_filters)
 {
     if (setBank(1) < 0)
         return -1;
 
-    if (gyroFilters == true)
+    if (t_gyro_filters == true)
     {
         if (writeRegister(Register::UB1_REG_GYRO_CONFIG_STATIC2, GYRO_NF_ENABLE | GYRO_AAF_ENABLE) < 0)
         {
@@ -172,7 +148,7 @@ int Device::setFilters(bool gyroFilters, bool accFilters)
     if (setBank(2) < 0)
         return -4;
 
-    if (accFilters == true)
+    if (t_acc_filters == true)
     {
         if (writeRegister(Register::UB2_REG_ACCEL_CONFIG_STATIC2, ACCEL_AAF_ENABLE) < 0)
         {
@@ -229,56 +205,54 @@ int Device::disableDataReadyInterrupt()
     return 1;
 }
 
-/* reads the most current data from ICM42688 and stores in buffer */
 int Device::getAGT()
 {
     // grab the data from the ICM42688
-    if (readRegisters(Register::UB0_REG_TEMP_DATA1, 14, _buffer) < 0)
+    if (readRegisters(Register::UB0_REG_TEMP_DATA1, 14, m_buffer) < 0)
         return -1;
 
     // combine bytes into 16 bit values
     for (size_t i = 0; i < 7; i++)
     {
-        _rawMeas[i] = ((int16_t) _buffer[i * 2] << 8) | _buffer[i * 2 + 1];
+        m_raw_meas[i] = ((int16_t) m_buffer[i * 2] << 8) | m_buffer[i * 2 + 1];
     }
 
-    _t = (static_cast<float>(_rawMeas[0]) / TEMP_DATA_REG_SCALE) + TEMP_OFFSET;
+    m_temp = (static_cast<float>(m_raw_meas[0]) / kTempDataRegScale) + kTempOffset;
 
-    _acc[0] = ((_rawMeas[1] * _accelScale) - _accB[0]) * _accS[0];
-    _acc[1] = ((_rawMeas[2] * _accelScale) - _accB[1]) * _accS[1];
-    _acc[2] = ((_rawMeas[3] * _accelScale) - _accB[2]) * _accS[2];
+    m_acc[0] = ((m_raw_meas[1] * m_accel_scale) - m_acc_b[0]) * m_acc_s[0];
+    m_acc[1] = ((m_raw_meas[2] * m_accel_scale) - m_acc_b[1]) * m_acc_s[1];
+    m_acc[2] = ((m_raw_meas[3] * m_accel_scale) - m_acc_b[2]) * m_acc_s[2];
 
-    _gyr[0] = (_rawMeas[4] * _gyroScale) - _gyrB[0];
-    _gyr[1] = (_rawMeas[5] * _gyroScale) - _gyrB[1];
-    _gyr[2] = (_rawMeas[6] * _gyroScale) - _gyrB[2];
+    m_gyr[0] = (m_raw_meas[4] * m_gyro_scale) - m_gyr_b[0];
+    m_gyr[1] = (m_raw_meas[5] * m_gyro_scale) - m_gyr_b[1];
+    m_gyr[2] = (m_raw_meas[6] * m_gyro_scale) - m_gyr_b[2];
 
     return 1;
 }
 
-/* estimates the gyro biases */
 int Device::calibrateGyro()
 {
     // set at a lower range (more resolution) since IMU not moving
-    const GyroFS current_fssel = _gyroFS;
+    const GyroFullScale current_fssel = m_gyro_fs;
     if (setGyroFS(dps250) < 0)
         return -1;
 
     // take samples and find bias
-    _gyroBD[0] = 0;
-    _gyroBD[1] = 0;
-    _gyroBD[2] = 0;
-    for (size_t i = 0; i < NUM_CALIB_SAMPLES; i++)
+    m_gyro_bd[0] = 0;
+    m_gyro_bd[1] = 0;
+    m_gyro_bd[2] = 0;
+    for (size_t i = 0; i < kNumCalibSamples; i++)
     {
         getAGT();
-        _gyroBD[0] += (gyrX() + _gyrB[0]) / NUM_CALIB_SAMPLES;
-        _gyroBD[1] += (gyrY() + _gyrB[1]) / NUM_CALIB_SAMPLES;
-        _gyroBD[2] += (gyrZ() + _gyrB[2]) / NUM_CALIB_SAMPLES;
+        m_gyro_bd[0] += (gyrX() + m_gyr_b[0]) / kNumCalibSamples;
+        m_gyro_bd[1] += (gyrY() + m_gyr_b[1]) / kNumCalibSamples;
+        m_gyro_bd[2] += (gyrZ() + m_gyr_b[2]) / kNumCalibSamples;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    _gyrB[0] = _gyroBD[0];
-    _gyrB[1] = _gyroBD[1];
-    _gyrB[2] = _gyroBD[2];
+    m_gyr_b[0] = m_gyro_bd[0];
+    m_gyr_b[1] = m_gyro_bd[1];
+    m_gyr_b[2] = m_gyro_bd[2];
 
     // recover the full scale setting
     if (setGyroFS(current_fssel) < 0)
@@ -286,105 +260,66 @@ int Device::calibrateGyro()
     return 1;
 }
 
-/* returns the gyro bias in the X direction, dps */
-float Device::getGyroBiasX()
-{
-    return _gyrB[0];
-}
-
-/* returns the gyro bias in the Y direction, dps */
-float Device::getGyroBiasY()
-{
-    return _gyrB[1];
-}
-
-/* returns the gyro bias in the Z direction, dps */
-float Device::getGyroBiasZ()
-{
-    return _gyrB[2];
-}
-
-/* sets the gyro bias in the X direction to bias, dps */
-void Device::setGyroBiasX(float bias)
-{
-    _gyrB[0] = bias;
-}
-
-/* sets the gyro bias in the Y direction to bias, dps */
-void Device::setGyroBiasY(float bias)
-{
-    _gyrB[1] = bias;
-}
-
-/* sets the gyro bias in the Z direction to bias, dps */
-void Device::setGyroBiasZ(float bias)
-{
-    _gyrB[2] = bias;
-}
-
-/* finds bias and scale factor calibration for the accelerometer,
-this should be run for each axis in each direction (6 total) to find
-the min and max values along each */
 int Device::calibrateAccel()
 {
     // set at a lower range (more resolution) since IMU not moving
-    const AccelFS current_fssel = _accelFS;
-    if (setAccelFS(gpm2) < 0)
+    const AccelFullScale current_fssel = m_accel_fs;
+    if (setAccelFS(AccelFullScale::gpm2) < 0)
         return -1;
 
     // take samples and find min / max
-    _accBD[0] = 0;
-    _accBD[1] = 0;
-    _accBD[2] = 0;
-    for (size_t i = 0; i < NUM_CALIB_SAMPLES; i++)
+    m_acc_bd[0] = 0;
+    m_acc_bd[1] = 0;
+    m_acc_bd[2] = 0;
+    for (size_t i = 0; i < kNumCalibSamples; i++)
     {
         getAGT();
-        _accBD[0] += (accX() / _accS[0] + _accB[0]) / NUM_CALIB_SAMPLES;
-        _accBD[1] += (accY() / _accS[1] + _accB[1]) / NUM_CALIB_SAMPLES;
-        _accBD[2] += (accZ() / _accS[2] + _accB[2]) / NUM_CALIB_SAMPLES;
+        m_acc_bd[0] += (accX() / m_acc_s[0] + m_acc_b[0]) / kNumCalibSamples;
+        m_acc_bd[1] += (accY() / m_acc_s[1] + m_acc_b[1]) / kNumCalibSamples;
+        m_acc_bd[2] += (accZ() / m_acc_s[2] + m_acc_b[2]) / kNumCalibSamples;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    if (_accBD[0] > 0.9f)
+    if (m_acc_bd[0] > 0.9f)
     {
-        _accMax[0] = _accBD[0];
+        m_acc_max[0] = m_acc_bd[0];
     }
-    if (_accBD[1] > 0.9f)
+    if (m_acc_bd[1] > 0.9f)
     {
-        _accMax[1] = _accBD[1];
+        m_acc_max[1] = m_acc_bd[1];
     }
-    if (_accBD[2] > 0.9f)
+    if (m_acc_bd[2] > 0.9f)
     {
-        _accMax[2] = _accBD[2];
+        m_acc_max[2] = m_acc_bd[2];
     }
-    if (_accBD[0] < -0.9f)
+    if (m_acc_bd[0] < -0.9f)
     {
-        _accMin[0] = _accBD[0];
+        m_acc_min[0] = m_acc_bd[0];
     }
-    if (_accBD[1] < -0.9f)
+    if (m_acc_bd[1] < -0.9f)
     {
-        _accMin[1] = _accBD[1];
+        m_acc_min[1] = m_acc_bd[1];
     }
-    if (_accBD[2] < -0.9f)
+    if (m_acc_bd[2] < -0.9f)
     {
-        _accMin[2] = _accBD[2];
+        m_acc_min[2] = m_acc_bd[2];
     }
 
     // find bias and scale factor
-    if ((abs(_accMin[0]) > 0.9f) && (abs(_accMax[0]) > 0.9f))
+    if ((abs(m_acc_min[0]) > 0.9f) && (abs(m_acc_max[0]) > 0.9f))
     {
-        _accB[0] = (_accMin[0] + _accMax[0]) / 2.0f;
-        _accS[0] = 1 / ((abs(_accMin[0]) + abs(_accMax[0])) / 2.0f);
+        m_acc_b[0] = (m_acc_min[0] + m_acc_max[0]) / 2.0f;
+        m_acc_s[0] = 1 / ((abs(m_acc_min[0]) + abs(m_acc_max[0])) / 2.0f);
     }
-    if ((abs(_accMin[1]) > 0.9f) && (abs(_accMax[1]) > 0.9f))
+    if ((abs(m_acc_min[1]) > 0.9f) && (abs(m_acc_max[1]) > 0.9f))
     {
-        _accB[1] = (_accMin[1] + _accMax[1]) / 2.0f;
-        _accS[1] = 1 / ((abs(_accMin[1]) + abs(_accMax[1])) / 2.0f);
+        m_acc_b[1] = (m_acc_min[1] + m_acc_max[1]) / 2.0f;
+        m_acc_s[1] = 1 / ((abs(m_acc_min[1]) + abs(m_acc_max[1])) / 2.0f);
     }
-    if ((abs(_accMin[2]) > 0.9f) && (abs(_accMax[2]) > 0.9f))
+    if ((abs(m_acc_min[2]) > 0.9f) && (abs(m_acc_max[2]) > 0.9f))
     {
-        _accB[2] = (_accMin[2] + _accMax[2]) / 2.0f;
-        _accS[2] = 1 / ((abs(_accMin[2]) + abs(_accMax[2])) / 2.0f);
+        m_acc_b[2] = (m_acc_min[2] + m_acc_max[2]) / 2.0f;
+        m_acc_s[2] = 1 / ((abs(m_acc_min[2]) + abs(m_acc_max[2])) / 2.0f);
     }
 
     // recover the full scale setting
@@ -393,124 +328,30 @@ int Device::calibrateAccel()
     return 1;
 }
 
-/* returns the accelerometer bias in the X direction, m/s/s */
-float Device::getAccelBiasX_mss()
-{
-    return _accB[0];
-}
-
-/* returns the accelerometer scale factor in the X direction */
-float Device::getAccelScaleFactorX()
-{
-    return _accS[0];
-}
-
-/* returns the accelerometer bias in the Y direction, m/s/s */
-float Device::getAccelBiasY_mss()
-{
-    return _accB[1];
-}
-
-/* returns the accelerometer scale factor in the Y direction */
-float Device::getAccelScaleFactorY()
-{
-    return _accS[1];
-}
-
-/* returns the accelerometer bias in the Z direction, m/s/s */
-float Device::getAccelBiasZ_mss()
-{
-    return _accB[2];
-}
-
-/* returns the accelerometer scale factor in the Z direction */
-float Device::getAccelScaleFactorZ()
-{
-    return _accS[2];
-}
-
-/* sets the accelerometer bias (m/s/s) and scale factor in the X direction */
-void Device::setAccelCalX(float bias, float scaleFactor)
-{
-    _accB[0] = bias;
-    _accS[0] = scaleFactor;
-}
-
-/* sets the accelerometer bias (m/s/s) and scale factor in the Y direction */
-void Device::setAccelCalY(float bias, float scaleFactor)
-{
-    _accB[1] = bias;
-    _accS[1] = scaleFactor;
-}
-
-/* sets the accelerometer bias (m/s/s) and scale factor in the Z direction */
-void Device::setAccelCalZ(float bias, float scaleFactor)
-{
-    _accB[2] = bias;
-    _accS[2] = scaleFactor;
-}
-
-/* returns the accelerometer measurement in the x direction, raw 16-bit integer */
-int16_t Device::getAccelX_count()
-{
-    return _rawMeas[1];
-}
-
-/* returns the accelerometer measurement in the y direction, raw 16-bit integer */
-int16_t Device::getAccelY_count()
-{
-    return _rawMeas[2];
-}
-
-/* returns the accelerometer measurement in the z direction, raw 16-bit integer */
-int16_t Device::getAccelZ_count()
-{
-    return _rawMeas[3];
-}
-
-/* returns the gyroscople measurement in the x direction, raw 16-bit integer */
-int16_t Device::getGyroX_count()
-{
-    return _rawMeas[4];
-}
-
-/* returns the gyroscople measurement in the y direction, raw 16-bit integer */
-int16_t Device::getGyroY_count()
-{
-    return _rawMeas[5];
-}
-
-/* returns the gyroscople measurement in the z direction, raw 16-bit integer */
-int16_t Device::getGyroZ_count()
-{
-    return _rawMeas[6];
-}
-
-/* writes a byte to ICM42688 register given a register address and data */
-int Device::writeRegister(Register t_register, uint8_t data)
+int Device::writeRegister(Register t_register, uint8_t t_data)
 {
     /* write data to device */
 #if ICM42688_FEATURE_SPI
-    if (_useSPI)
+    if (m_connection == Connection::Spi)
     {
-        const uint8_t buffer[2] = {(uint8_t) t_register, data};
-        spiTransfer(device_idx, &buffer[0], nullptr, 2);
+        const uint8_t buffer[2] = {(uint8_t) t_register, t_data};
+        spiTransfer(m_idx, &buffer[0], nullptr, 2);
     }
 #endif
 #if ICM42688_FEATURE_I2C
-    if (!_useSPI)
+    if (m_connection == Connection::I2c)
     {
-        i2cWrite(device_idx, (uint8_t) t_register); // write the register address
-        i2cWrite(device_idx, data);                 // write the data
+        i2cWrite(m_idx, (uint8_t) t_register); // write the register address
+        i2cWrite(m_idx, t_data);               // write the data
     }
 #endif
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     /* read back the register */
-    readRegisters(t_register, 1, _buffer);
+    readRegisters(t_register, 1, m_buffer);
     /* check the read back register against the written register */
-    if (_buffer[0] == data)
+    if (m_buffer[0] == t_data)
     {
         return 1;
     }
@@ -520,31 +361,30 @@ int Device::writeRegister(Register t_register, uint8_t data)
     }
 }
 
-/* reads registers from ICM42688 given a starting register address, number of bytes, and a pointer to store data */
-int Device::readRegisters(Register t_register, uint8_t count, uint8_t *dest)
+int Device::readRegisters(Register t_register, uint8_t t_count, uint8_t *t_dest)
 {
 #if ICM42688_FEATURE_SPI
-    if (_useSPI)
+    if (m_connection == Connection::Spi)
     {
-        assert(count < 16);
+        assert(t_count < 16);
 
         uint8_t buffer[16] = {};
         buffer[0]          = (uint8_t) t_register | 0x80;
-        spiTransfer(device_idx, &buffer[0], &buffer[0], count + 1);
-        memcpy(dest, buffer, count);
+        spiTransfer(m_idx, &buffer[0], &buffer[0], t_count + 1);
+        memcpy(t_dest, buffer, t_count);
 
         return 1;
     }
 #endif
 
 #if ICM42688_FEATURE_I2C
-    if (!_useSPI)
+    if (m_connection == Connection::I2c)
     {
-        i2cWrite(device_idx, (uint8_t) t_register); // specify the starting register address
-        _numBytes = count;
-        for (uint8_t i = 0; i < count; i++)
+        i2cWrite(m_idx, (uint8_t) t_register); // specify the starting register address
+        m_i2c_num_bytes = t_count;
+        for (uint8_t i = 0; i < t_count; i++)
         {
-            dest[i] = i2cRead(device_idx);
+            t_dest[i] = i2cRead(m_idx);
         }
 
         return 1;
@@ -554,15 +394,15 @@ int Device::readRegisters(Register t_register, uint8_t count, uint8_t *dest)
     return -1;
 }
 
-int Device::setBank(uint8_t bank)
+int Device::setBank(uint8_t t_bank)
 {
     // if we are already on this bank, bail
-    if (_bank == bank)
+    if (m_bank == t_bank)
         return 1;
 
-    _bank = bank;
+    m_bank = t_bank;
 
-    return writeRegister(Register::REG_BANK_SEL, bank);
+    return writeRegister(Register::REG_BANK_SEL, t_bank);
 }
 
 void Device::reset()
@@ -575,17 +415,16 @@ void Device::reset()
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
-/* gets the ICM42688 WHO_AM_I register value */
 uint8_t Device::whoAmI()
 {
     setBank(0);
 
     // read the WHO AM I register
-    if (readRegisters(Register::UB0_REG_WHO_AM_I, 1, _buffer) < 0)
+    if (readRegisters(Register::UB0_REG_WHO_AM_I, 1, m_buffer) < 0)
     {
         return -1;
     }
     // return the register value
-    return _buffer[0];
+    return m_buffer[0];
 }
 } // namespace ICM42688

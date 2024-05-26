@@ -8,7 +8,7 @@ namespace ICM42688
 class Device
 {
 public:
-    enum GyroFS : uint8_t
+    enum GyroFullScale : uint8_t
     {
         dps2000   = 0x00,
         dps1000   = 0x01,
@@ -20,7 +20,7 @@ public:
         dps15_625 = 0x07
     };
 
-    enum AccelFS : uint8_t
+    enum class AccelFullScale : uint8_t
     {
         gpm16 = 0x00,
         gpm8  = 0x01,
@@ -28,7 +28,7 @@ public:
         gpm2  = 0x03
     };
 
-    enum ODR : uint8_t
+    enum class OutputDataRate : uint8_t
     {
         odr32k    = 0x01, // LN mode only
         odr16k    = 0x02, // LN mode only
@@ -47,230 +47,182 @@ public:
         odr500    = 0x0F,
     };
 
+    enum class Connection
+    {
 #if ICM42688_FEATURE_I2C
-    /**
-     * @brief      Constructor for I2C communication
-     *
-     * @param      idx      I2C device idx
-     * @param[in]  address  Address of ICM 42688-p device
-     */
-    Device(uint8_t idx, uint8_t address);
+        I2c,
 #endif
-
 #if ICM42688_FEATURE_SPI
-    /**
-     * @brief      Constructor for SPI communication
-     *
-     * @param      idx    SPI device idx
-     * @param[in]  csPin  Chip Select pin
-     */
-    Device(uint8_t idx);
+        Spi,
 #endif
+    };
 
-    /**
-     * @brief      Initialize the device.
-     *
-     * @return     ret < 0 if error
-     */
+    // Constructor for device with the selected id and connection method
+    Device(const uint8_t t_idx, const Connection t_connection) : m_idx(t_idx), m_connection(t_connection)
+    {}
+
+    // Starts the communication with the device
+    // returns < 0 if error
     int begin();
 
-    /**
-     * @brief      Sets the full scale range for the accelerometer
-     *
-     * @param[in]  fssel  Full scale selection
-     *
-     * @return     ret < 0 if error
-     */
-    int setAccelFS(AccelFS fssel);
+    // Sets the Full Scale (FS) range for the accelerometer
+    // returns < 0 if error
+    int setAccelFS(AccelFullScale t_fssel);
 
-    /**
-     * @brief      Sets the full scale range for the gyro
-     *
-     * @param[in]  fssel  Full scale selection
-     *
-     * @return     ret < 0 if error
-     */
-    int setGyroFS(GyroFS fssel);
+    // Sets the Full Scale (FS) range for the gyro
+    // returns < 0 if error
+    int setGyroFS(GyroFullScale t_fssel);
 
-    /**
-     * @brief      Set the ODR for accelerometer
-     *
-     * @param[in]  odr   Output data rate
-     *
-     * @return     ret < 0 if error
-     */
-    int setAccelODR(ODR odr);
+    // Set the Output Data Rate (ODR) for accelerometer
+    // returns < 0 if error
+    int setAccelODR(OutputDataRate t_odr);
 
-    /**
-     * @brief      Set the ODR for gyro
-     *
-     * @param[in]  odr   Output data rate
-     *
-     * @return     ret < 0 if error
-     */
-    int setGyroODR(ODR odr);
+    // Set the Output Data Rate (ODR) for gyro
+    // returns < 0 if error
+    int setGyroODR(OutputDataRate t_odr);
 
-    int setFilters(bool gyroFilters, bool accFilters);
+    int setFilters(bool t_gyro_filters, bool t_acc_filters);
 
-    /**
-     * @brief      Enables the data ready interrupt.
-     *
-     *             - routes UI data ready interrupt to INT1
-     *             - push-pull, pulsed, active HIGH interrupts
-     *
-     * @return     ret < 0 if error
-     */
+    // Enables the data ready interrupt.
+    // routes UI data ready interrupt to INT1
+    // push-pull, pulsed, active HIGH interrupts
+    // returns < 0 if error
     int enableDataReadyInterrupt();
 
-    /**
-     * @brief      Masks the data ready interrupt
-     *
-     * @return     ret < 0 if error
-     */
+    // Masks the data ready interrupt
+    // returns < 0 if error
     int disableDataReadyInterrupt();
 
-    /**
-     * @brief      Transfers data from ICM 42688-p to microcontroller.
-     *             Must be called to access new measurements.
-     *
-     * @return     ret < 0 if error
-     */
+    // Transfers data from ICM 42688-p to microcontroller.
+    // Must be called to access new measurements.
+    // returns < 0 if error
     int getAGT();
 
-    /**
-     * @brief      Get accelerometer data, per axis
-     *
-     * @return     Acceleration in g's
-     */
-    float accX() const
-    {
-        return _acc[0];
-    }
-    float accY() const
-    {
-        return _acc[1];
-    }
-    float accZ() const
-    {
-        return _acc[2];
-    }
+    // Get accelerometer x-axis acceleration data in g's
+    float accX() const;
+    // Get accelerometer y-axis acceleration data in g's
+    float accY() const;
+    // Get accelerometer z-axis acceleration data in g's
+    float accZ() const;
 
-    /**
-     * @brief      Get gyro data, per axis
-     *
-     * @return     Angular velocity in dps
-     */
-    float gyrX() const
-    {
-        return _gyr[0];
-    }
-    float gyrY() const
-    {
-        return _gyr[1];
-    }
-    float gyrZ() const
-    {
-        return _gyr[2];
-    }
+    // Get gyro x-axis angular velocity data in dps
+    float gyrX() const;
+    // Get gyro y-axis angular velocity data in dps
+    float gyrY() const;
+    // Get gyro z-axis angular velocity data in dps
+    float gyrZ() const;
 
-    /**
-     * @brief      Get temperature of gyro die
-     *
-     * @return     Temperature in Celsius
-     */
-    float temp() const
-    {
-        return _t;
-    }
+    // Get temperature of gyro die in Celsius
+    float temp() const;
 
-    int16_t getAccelX_count();
-    int16_t getAccelY_count();
-    int16_t getAccelZ_count();
-    int16_t getGyroX_count();
-    int16_t getGyroY_count();
-    int16_t getGyroZ_count();
+    // returns the accelerometer measurement in the x direction, raw 16-bit integer
+    int16_t getAccelXCount() const;
+    // returns the accelerometer measurement in the y direction, raw 16-bit integer
+    int16_t getAccelYCount() const;
+    // returns the accelerometer measurement in the z direction, raw 16-bit integer
+    int16_t getAccelZCount() const;
 
-    int   calibrateGyro();
-    float getGyroBiasX();
-    float getGyroBiasY();
-    float getGyroBiasZ();
-    void  setGyroBiasX(float bias);
-    void  setGyroBiasY(float bias);
-    void  setGyroBiasZ(float bias);
-    int   calibrateAccel();
-    float getAccelBiasX_mss();
-    float getAccelScaleFactorX();
-    float getAccelBiasY_mss();
-    float getAccelScaleFactorY();
-    float getAccelBiasZ_mss();
-    float getAccelScaleFactorZ();
-    void  setAccelCalX(float bias, float scaleFactor);
-    void  setAccelCalY(float bias, float scaleFactor);
-    void  setAccelCalZ(float bias, float scaleFactor);
+    // returns the gyroscople measurement in the x direction, raw 16-bit integer
+    int16_t getGyroXCount() const;
+    // returns the gyroscople measurement in the y direction, raw 16-bit integer
+    int16_t getGyroYCount() const;
+    // returns the gyroscople measurement in the z direction, raw 16-bit integer
+    int16_t getGyroZCount() const;
+
+    // estimates the gyro biases
+    int calibrateGyro();
+
+    // returns the gyro bias in the X direction, dps
+    float getGyroBiasX() const;
+    // returns the gyro bias in the Y direction, dps
+    float getGyroBiasY() const;
+    // returns the gyro bias in the Z direction, dps
+    float getGyroBiasZ() const;
+    // sets the gyro bias in the X direction to bias, dps
+    void setGyroBiasX(float t_bias);
+    // sets the gyro bias in the Y direction to bias, dps
+    void setGyroBiasY(float t_bias);
+    // sets the gyro bias in the Z direction to bias, dps
+    void setGyroBiasZ(float t_bias);
+
+    // finds bias and scale factor calibration for the accelerometer,
+    // this should be run for each axis in each direction (6 total) to find
+    // the min and max values along each
+    int calibrateAccel();
+
+    // returns the accelerometer bias in the X direction, m/s/s
+    float getAccelBiasXMss() const;
+    // returns the accelerometer scale factor in the X direction
+    float getAccelScaleFactorX() const;
+    // returns the accelerometer bias in the Y direction, m/s/s
+    float getAccelBiasYMss() const;
+    // returns the accelerometer scale factor in the Y direction
+    float getAccelScaleFactorY() const;
+    // returns the accelerometer bias in the Z direction, m/s/s
+    float getAccelBiasZMss() const;
+    // returns the accelerometer scale factor in the Z direction
+    float getAccelScaleFactorZ() const;
+
+    // sets the accelerometer bias (m/s/s) and scale factor in the X direction
+    void setAccelCalX(float t_bias, float t_scale_factor);
+    // sets the accelerometer bias (m/s/s) and scale factor in the Y direction
+    void setAccelCalY(float t_bias, float t_scale_factor);
+    // sets the accelerometer bias (m/s/s) and scale factor in the Z direction
+    void setAccelCalZ(float t_bias, float t_scale_factor);
 
 protected:
-    uint8_t device_idx = 0;
+    uint8_t    m_idx = 0;
+    Connection m_connection;
 
 #if ICM42688_FEATURE_I2C
     ///\brief I2C Communication
-    uint8_t                   _address  = 0;
-    static constexpr uint32_t I2C_CLK   = 400000; // 400 kHz
-    size_t                    _numBytes = 0;      // number of bytes received from I2C
-#endif
-
-#if ICM42688_FEATURE_SPI
-    ///\brief SPI Communication
-    bool _useSPI = false;
-#else
-    const bool _useSPI = false;
+    size_t m_i2c_num_bytes = 0; // number of bytes received from I2C
 #endif
 
     // temp, accel xyz, gyro xyz
-    int16_t _rawMeas[7];
+    int16_t m_raw_meas[7];
 
     // buffer for reading from sensor
-    uint8_t _buffer[15] = {};
+    uint8_t m_buffer[15] = {};
 
     // data buffer
-    float _t      = 0.0f;
-    float _acc[3] = {};
-    float _gyr[3] = {};
+    float m_temp   = 0.0f;
+    float m_acc[3] = {};
+    float m_gyr[3] = {};
 
-    ///\brief Full scale resolution factors
-    float _accelScale = 0.0f;
-    float _gyroScale  = 0.0f;
+    // Full scale resolution factors
+    float m_accel_scale = 0.0f;
+    float m_gyro_scale  = 0.0f;
 
-    ///\brief Full scale selections
-    AccelFS _accelFS;
-    GyroFS  _gyroFS;
+    // Full scale selections
+    AccelFullScale m_accel_fs;
+    GyroFullScale  m_gyro_fs;
 
-    ///\brief Accel calibration
-    float _accBD[3]  = {};
-    float _accB[3]   = {};
-    float _accS[3]   = {1.0f, 1.0f, 1.0f};
-    float _accMax[3] = {};
-    float _accMin[3] = {};
+    // Accel calibration
+    float m_acc_bd[3]  = {};
+    float m_acc_b[3]   = {};
+    float m_acc_s[3]   = {1.0f, 1.0f, 1.0f};
+    float m_acc_max[3] = {};
+    float m_acc_min[3] = {};
 
-    ///\brief Gyro calibration
-    float _gyroBD[3] = {};
-    float _gyrB[3]   = {};
+    // Gyro calibration
+    float m_gyro_bd[3] = {};
+    float m_gyr_b[3]   = {};
 
-    ///\brief Constants
-    static constexpr uint8_t WHO_AM_I          = 0x47; ///< expected value in UB0_REG_WHO_AM_I reg
-    static constexpr int     NUM_CALIB_SAMPLES = 1000; ///< for gyro/accel bias calib
+    // Constants
+    static constexpr uint8_t kWhoAmI          = 0x47; ///< expected value in UB0_REG_WHO_AM_I reg
+    static constexpr int     kNumCalibSamples = 1000; ///< for gyro/accel bias calib
 
-    ///\brief Conversion formula to get temperature in Celsius (Sec 4.13)
-    static constexpr float TEMP_DATA_REG_SCALE = 132.48f;
-    static constexpr float TEMP_OFFSET         = 25.0f;
+    // Conversion formula to get temperature in Celsius (Sec 4.13)
+    static constexpr float kTempDataRegScale = 132.48f;
+    static constexpr float kTempOffset       = 25.0f;
 
-    uint8_t _bank = 0; ///< current user bank
+    uint8_t m_bank = 0; ///< current user bank
 
 #if ICM42688_FEATURE_FIFO
     const uint8_t FIFO_TEMP_EN = 0x04;
     const uint8_t FIFO_GYRO    = 0x02;
     const uint8_t FIFO_ACCEL   = 0x01;
-    // const uint8_t FIFO_COUNT = 0x2E;
-    // const uint8_t FIFO_DATA = 0x30;
 #endif
 
     // BANK 1
@@ -283,21 +235,19 @@ protected:
     const uint8_t ACCEL_AAF_ENABLE  = 0x00;
     const uint8_t ACCEL_AAF_DISABLE = 0x01;
 
-    // private functions
-    int writeRegister(Register t_register, uint8_t data);
-    int readRegisters(Register t_register, uint8_t count, uint8_t *dest);
-    int setBank(uint8_t bank);
+    // writes a byte to ICM42688 register given a register address and data
+    int writeRegister(Register t_register, uint8_t t_data);
+    // reads registers from ICM42688 given a starting register address,
+    // number of bytes, and a pointer to store data
+    int readRegisters(Register t_register, uint8_t t_count, uint8_t *t_dest);
+    int setBank(uint8_t t_bank);
 
-    /**
-     * @brief      Software reset of the device
-     */
+    // Software reset of the device
     void reset();
 
-    /**
-     * @brief      Read the WHO_AM_I register
-     *
-     * @return     Value of WHO_AM_I register
-     */
+    // Read the WHO_AM_I register
     uint8_t whoAmI();
 };
 } // namespace ICM42688
+
+#include "device_inl.h"

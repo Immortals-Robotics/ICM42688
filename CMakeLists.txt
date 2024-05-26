@@ -17,6 +17,7 @@ add_library(immortals::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
 set(HEADER_FILES
         source/device.h
+        source/device_inl.h
         source/registers.h)
 
 set(SOURCE_FILES
