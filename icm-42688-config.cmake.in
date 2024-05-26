@@ -1,1 +1,1 @@
-include("${CMAKE_CURRENT_LIST_DIR}/tmc-api-targets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/icm-42688-targets.cmake")
